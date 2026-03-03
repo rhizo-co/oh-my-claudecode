@@ -6,7 +6,7 @@ This release delivers 48 commits of team runtime stability improvements, securit
 
 ### New Features
 
-- **Deep Interview Skill** (#1215): Ouroboros-inspired Socratic questioning skill for requirements elicitation and problem decomposition.
+- **Deep Interview Skill** (#1215): [Ouroboros](https://github.com/Q00/ouroboros)-inspired Socratic questioning skill for requirements elicitation and problem decomposition.
 - **Ralph PRD Mode Mandatory** (#1219): Ralph now auto-generates `prd.json` when none exists, making PRD-driven iteration the default behavior. Stories iterate until all acceptance criteria pass. Opt-out via `--no-prd`.
 - **Factcheck Sentinel Readiness Gate** (#1210): Wired factcheck sentinel readiness gate into team pipeline for improved verification reliability.
 - **Model Aliases Configuration** (#1211, #1213): Added `modelAliases` config to override agent definition defaults for flexible model routing.
