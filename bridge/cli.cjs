@@ -20821,7 +20821,7 @@ var init_model_contract = __esm({
         supportsPromptMode: true,
         promptModeFlag: "-p",
         buildLaunchArgs(model, extraFlags = []) {
-          const args = ["--yolo"];
+          const args = ["--approval-mode", "yolo", "-i"];
           if (model) args.push("--model", model);
           return [...args, ...extraFlags];
         },
@@ -57637,9 +57637,6 @@ var allCustomTools = [
 // src/index.ts
 init_auto_update();
 
-// src/hooks/keyword-detector/index.ts
-init_auto_update();
-
 // src/hooks/task-size-detector/index.ts
 var DEFAULT_THRESHOLDS = {
   smallWordLimit: 50,
@@ -57784,7 +57781,10 @@ var KEYWORD_PATTERNS = {
   ralph: /\b(ralph)\b(?!-)/i,
   autopilot: /\b(autopilot|auto[\s-]?pilot|fullsend|full\s+auto)\b/i,
   ultrawork: /\b(ultrawork|ulw)\b/i,
-  team: /(?<!\b(?:my|the|our|a|his|her|their|its)\s)\bteam\b|\bcoordinated\s+team\b/i,
+  // Team keyword detection disabled — team mode is now explicit-only via /team skill.
+  // This prevents infinite spawning when Claude workers receive prompts containing "team".
+  team: /(?!x)x/,
+  // never-match placeholder (type system requires the key)
   ralplan: /\b(ralplan)\b/i,
   tdd: /\b(tdd)\b|\btest\s+first\b/i,
   ultrathink: /\b(ultrathink)\b/i,
@@ -57833,7 +57833,7 @@ function detectKeywordsWithType(text, _agentName) {
   const detected = [];
   const cleanedText = sanitizeForKeywordDetection(text);
   for (const type of KEYWORD_PRIORITY) {
-    if (type === "team" && !isTeamEnabled()) {
+    if (type === "team") {
       continue;
     }
     const pattern = KEYWORD_PATTERNS[type];
@@ -58819,6 +58819,9 @@ function getPromptText(input) {
   return "";
 }
 async function processKeywordDetector(input) {
+  if (process.env.OMC_TEAM_WORKER) {
+    return { continue: true };
+  }
   const promptText = getPromptText(input);
   if (!promptText) {
     return { continue: true };
@@ -58931,7 +58934,6 @@ Running directly without heavy agent stacking. Prefix with \`quick:\`, \`simple:
       // These are handled by UserPromptSubmit hook for skill invocation
       case "cancel":
       case "autopilot":
-      case "team":
       case "ralplan":
       case "tdd":
         messages.push(
@@ -62594,7 +62596,16 @@ function parseTeamArgs(tokens) {
   const args = [...tokens];
   let workerCount = 3;
   let agentType = "claude";
-  const first = args[0] || "";
+  let json = false;
+  const filteredArgs = [];
+  for (const arg of args) {
+    if (arg === "--json") {
+      json = true;
+    } else {
+      filteredArgs.push(arg);
+    }
+  }
+  const first = filteredArgs[0] || "";
   const match = first.match(/^(\d+)(?::([a-z][a-z0-9-]*))?$/i);
   if (match) {
     const count = Number.parseInt(match[1], 10);
@@ -62603,14 +62614,14 @@ function parseTeamArgs(tokens) {
     }
     workerCount = count;
     if (match[2]) agentType = match[2];
-    args.shift();
+    filteredArgs.shift();
   }
-  const task = args.join(" ").trim();
+  const task = filteredArgs.join(" ").trim();
   if (!task) {
     throw new Error('Usage: omc team [N:agent-type] "<task description>"');
   }
   const teamName = slugifyTask(task);
-  return { workerCount, agentType, task, teamName };
+  return { workerCount, agentType, task, teamName, json };
 }
 function sampleValueForField(field) {
   switch (field) {
@@ -62773,6 +62784,17 @@ async function handleTeamStart(parsed, cwd2) {
       tasks,
       cwd: cwd2
     });
+    if (parsed.json) {
+      const snapshot3 = await monitorTeamV22(runtime2.teamName, cwd2);
+      console.log(JSON.stringify({
+        teamName: runtime2.teamName,
+        sessionName: runtime2.sessionName,
+        workerCount: runtime2.config.worker_count,
+        agentType: parsed.agentType,
+        tasks: snapshot3 ? snapshot3.tasks : null
+      }));
+      return;
+    }
     console.log(`Team started: ${runtime2.teamName}`);
     console.log(`tmux session: ${runtime2.sessionName}`);
     console.log(`workers: ${runtime2.config.worker_count}`);
@@ -62792,6 +62814,23 @@ async function handleTeamStart(parsed, cwd2) {
     tasks,
     cwd: cwd2
   });
+  if (parsed.json) {
+    const snapshot2 = await monitorTeam2(runtime.teamName, cwd2, runtime.workerPaneIds);
+    console.log(JSON.stringify({
+      teamName: runtime.teamName,
+      sessionName: runtime.sessionName,
+      workerCount: runtime.workerNames.length,
+      agentType: parsed.agentType,
+      tasks: snapshot2 ? {
+        total: snapshot2.taskCounts.pending + snapshot2.taskCounts.inProgress + snapshot2.taskCounts.completed + snapshot2.taskCounts.failed,
+        pending: snapshot2.taskCounts.pending,
+        in_progress: snapshot2.taskCounts.inProgress,
+        completed: snapshot2.taskCounts.completed,
+        failed: snapshot2.taskCounts.failed
+      } : null
+    }));
+    return;
+  }
   console.log(`Team started: ${runtime.teamName}`);
   console.log(`tmux session: ${runtime.sessionName}`);
   console.log(`workers: ${runtime.workerNames.length}`);

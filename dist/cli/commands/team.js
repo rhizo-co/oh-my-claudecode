@@ -98,7 +98,18 @@ function parseTeamArgs(tokens) {
     const args = [...tokens];
     let workerCount = 3;
     let agentType = 'claude';
-    const first = args[0] || '';
+    let json = false;
+    // Extract --json flag before parsing positional args
+    const filteredArgs = [];
+    for (const arg of args) {
+        if (arg === '--json') {
+            json = true;
+        }
+        else {
+            filteredArgs.push(arg);
+        }
+    }
+    const first = filteredArgs[0] || '';
     const match = first.match(/^(\d+)(?::([a-z][a-z0-9-]*))?$/i);
     if (match) {
         const count = Number.parseInt(match[1], 10);
@@ -108,14 +119,14 @@ function parseTeamArgs(tokens) {
         workerCount = count;
         if (match[2])
             agentType = match[2];
-        args.shift();
+        filteredArgs.shift();
     }
-    const task = args.join(' ').trim();
+    const task = filteredArgs.join(' ').trim();
     if (!task) {
         throw new Error('Usage: omc team [N:agent-type] "<task description>"');
     }
     const teamName = slugifyTask(task);
-    return { workerCount, agentType, task, teamName };
+    return { workerCount, agentType, task, teamName, json };
 }
 function sampleValueForField(field) {
     switch (field) {
@@ -259,6 +270,17 @@ async function handleTeamStart(parsed, cwd) {
             tasks,
             cwd,
         });
+        if (parsed.json) {
+            const snapshot = await monitorTeamV2(runtime.teamName, cwd);
+            console.log(JSON.stringify({
+                teamName: runtime.teamName,
+                sessionName: runtime.sessionName,
+                workerCount: runtime.config.worker_count,
+                agentType: parsed.agentType,
+                tasks: snapshot ? snapshot.tasks : null,
+            }));
+            return;
+        }
         console.log(`Team started: ${runtime.teamName}`);
         console.log(`tmux session: ${runtime.sessionName}`);
         console.log(`workers: ${runtime.config.worker_count}`);
@@ -279,6 +301,23 @@ async function handleTeamStart(parsed, cwd) {
         tasks,
         cwd,
     });
+    if (parsed.json) {
+        const snapshot = await monitorTeam(runtime.teamName, cwd, runtime.workerPaneIds);
+        console.log(JSON.stringify({
+            teamName: runtime.teamName,
+            sessionName: runtime.sessionName,
+            workerCount: runtime.workerNames.length,
+            agentType: parsed.agentType,
+            tasks: snapshot ? {
+                total: snapshot.taskCounts.pending + snapshot.taskCounts.inProgress + snapshot.taskCounts.completed + snapshot.taskCounts.failed,
+                pending: snapshot.taskCounts.pending,
+                in_progress: snapshot.taskCounts.inProgress,
+                completed: snapshot.taskCounts.completed,
+                failed: snapshot.taskCounts.failed,
+            } : null,
+        }));
+        return;
+    }
     console.log(`Team started: ${runtime.teamName}`);
     console.log(`tmux session: ${runtime.sessionName}`);
     console.log(`workers: ${runtime.workerNames.length}`);

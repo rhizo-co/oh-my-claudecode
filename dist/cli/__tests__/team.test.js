@@ -79,6 +79,77 @@ describe('team cli', () => {
         expect(savedJob.status).toBe('running');
         expect(savedJob.pid).toBe(4242);
     });
+    it('teamCommand start --json outputs valid JSON envelope', async () => {
+        const write = vi.fn();
+        const end = vi.fn();
+        const unref = vi.fn();
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        mocks.spawn.mockReturnValue({
+            pid: 7777,
+            stdin: { write, end },
+            unref,
+        });
+        const { teamCommand } = await import('../team.js');
+        await teamCommand(['start', '--agent', 'codex', '--task', 'review auth flow', '--json']);
+        expect(mocks.spawn).toHaveBeenCalledTimes(1);
+        expect(write).toHaveBeenCalledTimes(1);
+        expect(end).toHaveBeenCalledTimes(1);
+        // Verify stdin payload sent to runtime-cli
+        const stdinPayload = JSON.parse(write.mock.calls[0][0]);
+        expect(stdinPayload.agentTypes).toEqual(['codex']);
+        expect(stdinPayload.tasks).toHaveLength(1);
+        expect(stdinPayload.tasks[0].description).toBe('review auth flow');
+        // Verify --json causes structured JSON output
+        expect(logSpy).toHaveBeenCalledTimes(1);
+        const output = JSON.parse(logSpy.mock.calls[0][0]);
+        expect(output.jobId).toMatch(/^omc-[a-z0-9]{1,12}$/);
+        expect(output.status).toBe('running');
+        expect(output.pid).toBe(7777);
+        logSpy.mockRestore();
+    });
+    it('teamCommand start --json with --count expands agent types', async () => {
+        const write = vi.fn();
+        const end = vi.fn();
+        const unref = vi.fn();
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        mocks.spawn.mockReturnValue({
+            pid: 8888,
+            stdin: { write, end },
+            unref,
+        });
+        const { teamCommand } = await import('../team.js');
+        await teamCommand([
+            'start', '--agent', 'gemini', '--count', '3',
+            '--task', 'lint all modules', '--name', 'lint-team', '--json',
+        ]);
+        const stdinPayload = JSON.parse(write.mock.calls[0][0]);
+        expect(stdinPayload.teamName).toBe('lint-team');
+        expect(stdinPayload.agentTypes).toEqual(['gemini', 'gemini', 'gemini']);
+        expect(stdinPayload.tasks).toHaveLength(3);
+        expect(stdinPayload.tasks.every((t) => t.description === 'lint all modules')).toBe(true);
+        const output = JSON.parse(logSpy.mock.calls[0][0]);
+        expect(output.status).toBe('running');
+        logSpy.mockRestore();
+    });
+    it('teamCommand start without --json outputs non-JSON', async () => {
+        const write = vi.fn();
+        const end = vi.fn();
+        const unref = vi.fn();
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        mocks.spawn.mockReturnValue({
+            pid: 9999,
+            stdin: { write, end },
+            unref,
+        });
+        const { teamCommand } = await import('../team.js');
+        await teamCommand(['start', '--agent', 'claude', '--task', 'do stuff']);
+        expect(logSpy).toHaveBeenCalledTimes(1);
+        // Without --json, output is a raw object (not JSON-stringified)
+        const rawOutput = logSpy.mock.calls[0][0];
+        expect(typeof rawOutput).toBe('object');
+        expect(rawOutput.status).toBe('running');
+        logSpy.mockRestore();
+    });
     it('getTeamJobStatus converges to result artifact state', async () => {
         const { getTeamJobStatus } = await import('../team.js');
         const jobId = 'omc-abc123';
