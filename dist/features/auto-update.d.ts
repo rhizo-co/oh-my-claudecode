@@ -10,7 +10,6 @@
  * - Configurable update notifications
  */
 import { TaskTool } from '../hooks/beads-context/types.js';
-import type { NotificationConfig } from '../notifications/types.js';
 /** GitHub repository information */
 export declare const REPO_OWNER = "Yeachan-Heo";
 export declare const REPO_NAME = "oh-my-claudecode";
@@ -94,12 +93,8 @@ export interface OMCConfig {
     setupCompleted?: string;
     /** Version of setup wizard that was completed */
     setupVersion?: string;
-    /** Stop hook callback configuration (legacy, use notifications instead) */
+    /** Stop hook callback configuration */
     stopHookCallbacks?: StopHookCallbacksConfig;
-    /** Multi-platform lifecycle notification configuration */
-    notifications?: NotificationConfig;
-    /** Named notification profiles (keyed by profile name) */
-    notificationProfiles?: Record<string, NotificationConfig>;
     /** Whether HUD statusline is enabled (default: true). Set to false to skip HUD installation. */
     hudEnabled?: boolean;
     /** Whether to prompt for upgrade at session start when a new version is available (default: true).
