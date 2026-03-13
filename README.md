@@ -28,7 +28,7 @@ else
 fi
 
 # Build
-pnpm install --frozen-lockfile && pnpm build
+pnpm install && pnpm build
 
 # Patch installed_plugins.json to point to the fork
 PLUGINS_FILE="$HOME/.claude/plugins/installed_plugins.json"

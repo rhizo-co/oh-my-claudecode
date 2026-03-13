@@ -5,16 +5,23 @@ FORK_DIR="$HOME/.claude/plugins/cache/omc/oh-my-claudecode-rhizo"
 # Clone or update
 if [ -d "$FORK_DIR" ]; then
   echo "Updating existing fork..."
-  cd "$FORK_DIR" && git pull --ff-only
+  cd "$FORK_DIR"
+  git stash --quiet 2>/dev/null || true
+  git pull --ff-only
 else
   echo "Cloning hardened fork..."
   git clone https://github.com/rhizo-co/oh-my-claudecode.git "$FORK_DIR"
   cd "$FORK_DIR"
 fi
 
+# Remove stale node_modules symlink from upstream if present
+if [ -L "$FORK_DIR/node_modules" ]; then
+  rm "$FORK_DIR/node_modules"
+fi
+
 # Build
 echo "Installing dependencies and building..."
-pnpm install --frozen-lockfile && pnpm build
+pnpm install && pnpm build
 
 # Patch installed_plugins.json to point to the fork
 PLUGINS_FILE="$HOME/.claude/plugins/installed_plugins.json"
