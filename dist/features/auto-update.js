@@ -240,8 +240,6 @@ export function getOMCConfig() {
             setupCompleted: config.setupCompleted,
             setupVersion: config.setupVersion,
             stopHookCallbacks: config.stopHookCallbacks,
-            notifications: config.notifications,
-            notificationProfiles: config.notificationProfiles,
             hudEnabled: config.hudEnabled,
             autoUpgradePrompt: config.autoUpgradePrompt,
             nodeBinary: config.nodeBinary,
