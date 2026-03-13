@@ -15285,37 +15285,6 @@ function formatSessionSummary(metrics, format = "markdown") {
 **Ended At:** ${metrics.ended_at}
 `.trim();
 }
-function normalizeDiscordTagList(tagList) {
-  if (!tagList || tagList.length === 0) {
-    return [];
-  }
-  return tagList.map((tag) => tag.trim()).filter((tag) => tag.length > 0).map((tag) => {
-    if (tag === "@here" || tag === "@everyone") {
-      return tag;
-    }
-    const roleMatch = tag.match(/^role:(\d+)$/);
-    if (roleMatch) {
-      return `<@&${roleMatch[1]}>`;
-    }
-    if (/^\d+$/.test(tag)) {
-      return `<@${tag}>`;
-    }
-    return tag;
-  });
-}
-function normalizeTelegramTagList(tagList) {
-  if (!tagList || tagList.length === 0) {
-    return [];
-  }
-  return tagList.map((tag) => tag.trim()).filter((tag) => tag.length > 0).map((tag) => tag.startsWith("@") ? tag : `@${tag}`);
-}
-function prefixMessageWithTags(message, tags) {
-  if (tags.length === 0) {
-    return message;
-  }
-  return `${tags.join(" ")}
-${message}`;
-}
 function interpolatePath(pathTemplate, sessionId) {
   const now = /* @__PURE__ */ new Date();
   const date3 = now.toISOString().split("T")[0];
@@ -15334,72 +15303,6 @@ async function writeToFile(config2, content, sessionId) {
     console.error("[stop-callback] File write failed:", error2);
   }
 }
-async function sendTelegram(config2, message) {
-  if (!config2.botToken || !config2.chatId) {
-    console.error("[stop-callback] Telegram: missing botToken or chatId");
-    return;
-  }
-  if (!/^[0-9]+:[A-Za-z0-9_-]+$/.test(config2.botToken)) {
-    console.error("[stop-callback] Telegram: invalid bot token format");
-    return;
-  }
-  try {
-    const url = `https://api.telegram.org/bot${config2.botToken}/sendMessage`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: config2.chatId,
-        text: message,
-        parse_mode: "Markdown"
-      }),
-      signal: AbortSignal.timeout(1e4)
-    });
-    if (!response.ok) {
-      throw new Error(`Telegram API error: ${response.status} - ${response.statusText}`);
-    }
-    console.log("[stop-callback] Telegram notification sent");
-  } catch (error2) {
-    console.error("[stop-callback] Telegram send failed:", error2 instanceof Error ? error2.message : "Unknown error");
-  }
-}
-async function sendDiscord(config2, message) {
-  if (!config2.webhookUrl) {
-    console.error("[stop-callback] Discord: missing webhookUrl");
-    return;
-  }
-  try {
-    const url = new URL(config2.webhookUrl);
-    const allowedHosts = ["discord.com", "discordapp.com"];
-    if (!allowedHosts.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`))) {
-      console.error("[stop-callback] Discord: webhook URL must be from discord.com or discordapp.com");
-      return;
-    }
-    if (url.protocol !== "https:") {
-      console.error("[stop-callback] Discord: webhook URL must use HTTPS");
-      return;
-    }
-  } catch {
-    console.error("[stop-callback] Discord: invalid webhook URL");
-    return;
-  }
-  try {
-    const response = await fetch(config2.webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content: message
-      }),
-      signal: AbortSignal.timeout(1e4)
-    });
-    if (!response.ok) {
-      throw new Error(`Discord webhook error: ${response.status} - ${response.statusText}`);
-    }
-    console.log("[stop-callback] Discord notification sent");
-  } catch (error2) {
-    console.error("[stop-callback] Discord send failed:", error2 instanceof Error ? error2.message : "Unknown error");
-  }
-}
 async function triggerStopCallbacks(metrics, _input, options = {}) {
   const config2 = getOMCConfig();
   const callbacks = config2.stopHookCallbacks;
@@ -15412,18 +15315,6 @@ async function triggerStopCallbacks(metrics, _input, options = {}) {
     const format = callbacks.file.format || "markdown";
     const summary = formatSessionSummary(metrics, format);
     promises.push(writeToFile(callbacks.file, summary, metrics.session_id));
-  }
-  if (!skipPlatforms.has("telegram") && callbacks.telegram?.enabled) {
-    const summary = formatSessionSummary(metrics, "markdown");
-    const tags = normalizeTelegramTagList(callbacks.telegram.tagList);
-    const message = prefixMessageWithTags(summary, tags);
-    promises.push(sendTelegram(callbacks.telegram, message));
-  }
-  if (!skipPlatforms.has("discord") && callbacks.discord?.enabled) {
-    const summary = formatSessionSummary(metrics, "markdown");
-    const tags = normalizeDiscordTagList(callbacks.discord.tagList);
-    const message = prefixMessageWithTags(summary, tags);
-    promises.push(sendDiscord(callbacks.discord, message));
   }
   if (promises.length === 0) {
     return;
@@ -62997,155 +62888,15 @@ Examples:
   console.log(source_default.blue("Current configuration:\n"));
   console.log(JSON.stringify(config2, null, 2));
 });
-var _configStopCallback = program2.command("config-stop-callback <type>").description("Configure stop hook callbacks (file/telegram/discord/slack)").option("--enable", "Enable callback").option("--disable", "Disable callback").option("--path <path>", "File path (supports {session_id}, {date}, {time})").option("--format <format>", "File format: markdown | json").option("--token <token>", "Bot token (telegram or discord-bot)").option("--chat <id>", "Telegram chat ID").option("--webhook <url>", "Discord webhook URL").option("--channel-id <id>", "Discord bot channel ID (used with --profile)").option("--tag-list <csv>", "Replace tag list (comma-separated, telegram/discord only)").option("--add-tag <tag>", "Append one tag (telegram/discord only)").option("--remove-tag <tag>", "Remove one tag (telegram/discord only)").option("--clear-tags", "Clear all tags (telegram/discord only)").option("--profile <name>", "Named notification profile to configure").option("--show", "Show current configuration").addHelpText("after", `
+var _configStopCallback = program2.command("config-stop-callback <type>").description("Configure stop hook callbacks (file)").option("--enable", "Enable callback").option("--disable", "Disable callback").option("--path <path>", "File path (supports {session_id}, {date}, {time})").option("--format <format>", "File format: markdown | json").option("--show", "Show current configuration").addHelpText("after", `
 Types:
   file       File system callback (saves session summary to disk)
-  telegram   Telegram bot notification
-  discord    Discord webhook notification
-  slack      Slack incoming webhook notification
-
-Profile types (use with --profile):
-  discord-bot  Discord Bot API (token + channel ID)
-  slack        Slack incoming webhook
-  webhook      Generic webhook (POST with JSON body)
 
 Examples:
   $ omc config-stop-callback file --enable --path ~/.claude/logs/{date}.md
-  $ omc config-stop-callback telegram --enable --token <token> --chat <id>
-  $ omc config-stop-callback discord --enable --webhook <url>
   $ omc config-stop-callback file --disable
-  $ omc config-stop-callback file --show
-
-  # Named profiles (stored in notificationProfiles):
-  $ omc config-stop-callback discord --profile work --enable --webhook <url>
-  $ omc config-stop-callback telegram --profile work --enable --token <tk> --chat <id>
-  $ omc config-stop-callback discord-bot --profile ops --enable --token <tk> --channel-id <id>
-
-  # Select profile at launch:
-  $ OMC_NOTIFY_PROFILE=work claude`).action(async (type, options) => {
-  if (options.profile) {
-    const profileValidTypes = ["file", "telegram", "discord", "discord-bot", "slack", "webhook"];
-    if (!profileValidTypes.includes(type)) {
-      console.error(source_default.red(`Invalid type for profile: ${type}`));
-      console.error(source_default.gray(`Valid types: ${profileValidTypes.join(", ")}`));
-      process.exit(1);
-    }
-    const config3 = getOMCConfig();
-    config3.notificationProfiles = config3.notificationProfiles || {};
-    const profileName = options.profile;
-    const profile = config3.notificationProfiles[profileName] || { enabled: true };
-    if (options.show) {
-      if (config3.notificationProfiles[profileName]) {
-        console.log(source_default.blue(`Profile "${profileName}" \u2014 ${type} configuration:`));
-        const platformConfig = profile[type];
-        if (platformConfig) {
-          console.log(JSON.stringify(platformConfig, null, 2));
-        } else {
-          console.log(source_default.yellow(`No ${type} platform configured in profile "${profileName}".`));
-        }
-      } else {
-        console.log(source_default.yellow(`Profile "${profileName}" not found.`));
-      }
-      return;
-    }
-    let enabled2;
-    if (options.enable) enabled2 = true;
-    else if (options.disable) enabled2 = false;
-    switch (type) {
-      case "discord": {
-        const current = profile.discord;
-        if (enabled2 === true && (!options.webhook && !current?.webhookUrl)) {
-          console.error(source_default.red("Discord requires --webhook <webhook_url>"));
-          process.exit(1);
-        }
-        profile.discord = {
-          ...current,
-          enabled: enabled2 ?? current?.enabled ?? false,
-          webhookUrl: options.webhook ?? current?.webhookUrl
-        };
-        break;
-      }
-      case "discord-bot": {
-        const current = profile["discord-bot"];
-        if (enabled2 === true && (!options.token && !current?.botToken)) {
-          console.error(source_default.red("Discord bot requires --token <bot_token>"));
-          process.exit(1);
-        }
-        if (enabled2 === true && (!options.channelId && !current?.channelId)) {
-          console.error(source_default.red("Discord bot requires --channel-id <channel_id>"));
-          process.exit(1);
-        }
-        profile["discord-bot"] = {
-          ...current,
-          enabled: enabled2 ?? current?.enabled ?? false,
-          botToken: options.token ?? current?.botToken,
-          channelId: options.channelId ?? current?.channelId
-        };
-        break;
-      }
-      case "telegram": {
-        const current = profile.telegram;
-        if (enabled2 === true && (!options.token && !current?.botToken)) {
-          console.error(source_default.red("Telegram requires --token <bot_token>"));
-          process.exit(1);
-        }
-        if (enabled2 === true && (!options.chat && !current?.chatId)) {
-          console.error(source_default.red("Telegram requires --chat <chat_id>"));
-          process.exit(1);
-        }
-        profile.telegram = {
-          ...current,
-          enabled: enabled2 ?? current?.enabled ?? false,
-          botToken: options.token ?? current?.botToken,
-          chatId: options.chat ?? current?.chatId
-        };
-        break;
-      }
-      case "slack": {
-        const current = profile.slack;
-        if (enabled2 === true && (!options.webhook && !current?.webhookUrl)) {
-          console.error(source_default.red("Slack requires --webhook <webhook_url>"));
-          process.exit(1);
-        }
-        profile.slack = {
-          ...current,
-          enabled: enabled2 ?? current?.enabled ?? false,
-          webhookUrl: options.webhook ?? current?.webhookUrl
-        };
-        break;
-      }
-      case "webhook": {
-        const current = profile.webhook;
-        if (enabled2 === true && (!options.webhook && !current?.url)) {
-          console.error(source_default.red("Webhook requires --webhook <url>"));
-          process.exit(1);
-        }
-        profile.webhook = {
-          ...current,
-          enabled: enabled2 ?? current?.enabled ?? false,
-          url: options.webhook ?? current?.url
-        };
-        break;
-      }
-      case "file": {
-        console.error(source_default.yellow("File callbacks are not supported in notification profiles."));
-        console.error(source_default.gray("Use without --profile for file callbacks."));
-        process.exit(1);
-        break;
-      }
-    }
-    config3.notificationProfiles[profileName] = profile;
-    try {
-      (0, import_fs86.writeFileSync)(CONFIG_FILE, JSON.stringify(config3, null, 2), "utf-8");
-      console.log(source_default.green(`\u2713 Profile "${profileName}" \u2014 ${type} configured`));
-      console.log(JSON.stringify(profile[type], null, 2));
-    } catch (error2) {
-      console.error(source_default.red("Failed to write configuration:"), error2);
-      process.exit(1);
-    }
-    return;
-  }
-  const validTypes = ["file", "telegram", "discord", "slack"];
+  $ omc config-stop-callback file --show`).action(async (type, options) => {
+  const validTypes = ["file"];
   if (!validTypes.includes(type)) {
     console.error(source_default.red(`Invalid callback type: ${type}`));
     console.error(source_default.gray(`Valid types: ${validTypes.join(", ")}`));
@@ -63169,27 +62920,6 @@ Examples:
   } else if (options.disable) {
     enabled = false;
   }
-  const hasTagListChanges = options.tagList !== void 0 || options.addTag !== void 0 || options.removeTag !== void 0 || options.clearTags;
-  const parseTagList = (value) => value.split(",").map((tag) => tag.trim()).filter(Boolean);
-  const resolveTagList = (currentTagList) => {
-    let next = options.tagList !== void 0 ? parseTagList(options.tagList) : [...currentTagList ?? []];
-    if (options.clearTags) {
-      next = [];
-    }
-    if (options.addTag !== void 0) {
-      const tagToAdd = String(options.addTag).trim();
-      if (tagToAdd && !next.includes(tagToAdd)) {
-        next.push(tagToAdd);
-      }
-    }
-    if (options.removeTag !== void 0) {
-      const tagToRemove = String(options.removeTag).trim();
-      if (tagToRemove) {
-        next = next.filter((tag) => tag !== tagToRemove);
-      }
-    }
-    return next;
-  };
   switch (type) {
     case "file": {
       const current = config2.stopHookCallbacks.file;
@@ -63197,53 +62927,6 @@ Examples:
         enabled: enabled ?? current?.enabled ?? false,
         path: options.path ?? current?.path ?? "~/.claude/session-logs/{session_id}.md",
         format: options.format ?? current?.format ?? "markdown"
-      };
-      break;
-    }
-    case "telegram": {
-      const current = config2.stopHookCallbacks.telegram;
-      if (enabled === true && (!options.token && !current?.botToken)) {
-        console.error(source_default.red("Telegram requires --token <bot_token>"));
-        process.exit(1);
-      }
-      if (enabled === true && (!options.chat && !current?.chatId)) {
-        console.error(source_default.red("Telegram requires --chat <chat_id>"));
-        process.exit(1);
-      }
-      config2.stopHookCallbacks.telegram = {
-        ...current,
-        enabled: enabled ?? current?.enabled ?? false,
-        botToken: options.token ?? current?.botToken,
-        chatId: options.chat ?? current?.chatId,
-        tagList: hasTagListChanges ? resolveTagList(current?.tagList) : current?.tagList
-      };
-      break;
-    }
-    case "discord": {
-      const current = config2.stopHookCallbacks.discord;
-      if (enabled === true && (!options.webhook && !current?.webhookUrl)) {
-        console.error(source_default.red("Discord requires --webhook <webhook_url>"));
-        process.exit(1);
-      }
-      config2.stopHookCallbacks.discord = {
-        ...current,
-        enabled: enabled ?? current?.enabled ?? false,
-        webhookUrl: options.webhook ?? current?.webhookUrl,
-        tagList: hasTagListChanges ? resolveTagList(current?.tagList) : current?.tagList
-      };
-      break;
-    }
-    case "slack": {
-      const current = config2.stopHookCallbacks.slack;
-      if (enabled === true && (!options.webhook && !current?.webhookUrl)) {
-        console.error(source_default.red("Slack requires --webhook <webhook_url>"));
-        process.exit(1);
-      }
-      config2.stopHookCallbacks.slack = {
-        ...current,
-        enabled: enabled ?? current?.enabled ?? false,
-        webhookUrl: options.webhook ?? current?.webhookUrl,
-        tagList: hasTagListChanges ? resolveTagList(current?.tagList) : current?.tagList
       };
       break;
     }
@@ -63255,76 +62938,6 @@ Examples:
   } catch (error2) {
     console.error(source_default.red("Failed to write configuration:"), error2);
     process.exit(1);
-  }
-});
-program2.command("config-notify-profile [name]").description("Manage notification profiles").option("--list", "List all profiles").option("--show", "Show profile configuration").option("--delete", "Delete a profile").addHelpText("after", `
-Examples:
-  $ omc config-notify-profile --list
-  $ omc config-notify-profile work --show
-  $ omc config-notify-profile work --delete
-
-  # Create/update profiles via config-stop-callback --profile:
-  $ omc config-stop-callback discord --profile work --enable --webhook <url>
-
-  # Select profile at launch:
-  $ OMC_NOTIFY_PROFILE=work claude`).action(async (name, options) => {
-  const config2 = getOMCConfig();
-  const profiles = config2.notificationProfiles || {};
-  if (options.list || !name) {
-    const names = Object.keys(profiles);
-    if (names.length === 0) {
-      console.log(source_default.yellow("No notification profiles configured."));
-      console.log(source_default.gray("Create one with: omc config-stop-callback <type> --profile <name> --enable ..."));
-    } else {
-      console.log(source_default.blue("Notification profiles:"));
-      for (const pName of names) {
-        const p = profiles[pName];
-        const platforms = ["discord", "discord-bot", "telegram", "slack", "webhook"].filter((plat) => p[plat]?.enabled).join(", ");
-        const status = p.enabled !== false ? source_default.green("enabled") : source_default.red("disabled");
-        console.log(`  ${source_default.bold(pName)} [${status}] \u2014 ${platforms || "no platforms"}`);
-      }
-    }
-    const activeProfile = process.env.OMC_NOTIFY_PROFILE;
-    if (activeProfile) {
-      console.log(source_default.gray(`
-Active profile (OMC_NOTIFY_PROFILE): ${activeProfile}`));
-    }
-    return;
-  }
-  if (options.show) {
-    if (profiles[name]) {
-      console.log(source_default.blue(`Profile "${name}":`));
-      console.log(JSON.stringify(profiles[name], null, 2));
-    } else {
-      console.log(source_default.yellow(`Profile "${name}" not found.`));
-    }
-    return;
-  }
-  if (options.delete) {
-    if (!profiles[name]) {
-      console.log(source_default.yellow(`Profile "${name}" not found.`));
-      return;
-    }
-    delete profiles[name];
-    config2.notificationProfiles = profiles;
-    if (Object.keys(profiles).length === 0) {
-      delete config2.notificationProfiles;
-    }
-    try {
-      (0, import_fs86.writeFileSync)(CONFIG_FILE, JSON.stringify(config2, null, 2), "utf-8");
-      console.log(source_default.green(`\u2713 Profile "${name}" deleted`));
-    } catch (error2) {
-      console.error(source_default.red("Failed to write configuration:"), error2);
-      process.exit(1);
-    }
-    return;
-  }
-  if (profiles[name]) {
-    console.log(source_default.blue(`Profile "${name}":`));
-    console.log(JSON.stringify(profiles[name], null, 2));
-  } else {
-    console.log(source_default.yellow(`Profile "${name}" not found.`));
-    console.log(source_default.gray("Create it with: omc config-stop-callback <type> --profile " + name + " --enable ..."));
   }
 });
 program2.command("info").description("Show system and agent information").addHelpText("after", `

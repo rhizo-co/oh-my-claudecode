@@ -30,45 +30,13 @@ export interface StopCallbackFileConfig {
     format?: 'markdown' | 'json';
 }
 /**
- * Stop hook callback configuration for Telegram
- */
-export interface StopCallbackTelegramConfig {
-    enabled: boolean;
-    /** Telegram bot token */
-    botToken?: string;
-    /** Chat ID to send messages to */
-    chatId?: string;
-    /** Optional tags/usernames to prefix in notifications */
-    tagList?: string[];
-}
-/**
- * Stop hook callback configuration for Discord
- */
-export interface StopCallbackDiscordConfig {
-    enabled: boolean;
-    /** Discord webhook URL */
-    webhookUrl?: string;
-    /** Optional tags/user IDs/roles to prefix in notifications */
-    tagList?: string[];
-}
-/**
- * Stop hook callback configuration for Slack
- */
-export interface StopCallbackSlackConfig {
-    enabled: boolean;
-    /** Slack incoming webhook URL */
-    webhookUrl?: string;
-    /** Optional tags/mentions to include in notifications */
-    tagList?: string[];
-}
-/**
  * Stop hook callbacks configuration
+ *
+ * External notification integrations (Telegram, Discord, Slack) have been
+ * removed for security hardening. Only file logging is supported.
  */
 export interface StopHookCallbacksConfig {
     file?: StopCallbackFileConfig;
-    telegram?: StopCallbackTelegramConfig;
-    discord?: StopCallbackDiscordConfig;
-    slack?: StopCallbackSlackConfig;
 }
 /**
  * OMC configuration (stored in .omc-config.json)
