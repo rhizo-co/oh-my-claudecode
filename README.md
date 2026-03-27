@@ -4,7 +4,17 @@
 
 ---
 
-## Install (One-Liner)
+## Install Quick Start for Bobsled Employees (One-Liner)
+
+**Step 1: Install from the original repo**
+
+```bash
+/plugin marketplace add https://github.com/Yeachan-Heo/oh-my-claudecode
+/plugin install oh-my-claudecode
+```
+
+**Step 2: Replace the source code with the Bobsled security fork**
+
 
 Run this to install the hardened fork and configure Claude Code to use it:
 
@@ -52,6 +62,13 @@ echo "Done. Restart Claude Code to use the hardened fork."
 ```
 
 To update later, just re-run the same command.
+
+
+**Step 3: Run Setup**
+
+```bash
+/oh-my-claudecode:setup
+```
 
 ---
 
