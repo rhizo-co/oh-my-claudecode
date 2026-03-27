@@ -4,7 +4,7 @@
 
 ---
 
-## Install Quick Start for Bobsled Employees (One-Liner)
+## Install Quick Start for Bobsled Employees
 
 **Step 1: Install from the original repo**
 
