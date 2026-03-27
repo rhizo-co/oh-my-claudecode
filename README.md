@@ -13,7 +13,7 @@
 /plugin install oh-my-claudecode
 ```
 
-**Step 2: Replace the source code with the Bobsled security fork**
+**Step 2: Replace the source code with the Bobsled security fork (use the one liner)**
 
 
 Run this to install the hardened fork and configure Claude Code to use it:
